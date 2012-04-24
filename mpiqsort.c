@@ -38,14 +38,14 @@ int binary_search(int *a, int low, int high, int key) {
 /* Returns a new list after merging the two input lists */
 int *merge_lists(int *list1,int size1,int *list2,int size2)
 {
-    int *newlst = (int *)malloc((size1+size2)*sizeof(int));
+    int *newlist = (int *)malloc((size1+size2)*sizeof(int));
     int i,j,k;
     for(i=0,j=0,k=0;i<size1 && j<size2;){
         if(list1[i]<=list2[j]){
-            newlst[k++]=list1[i++];
+            newlist[k++]=list1[i++];
         }
         else {
-            newlst[k++]=list2[j++];
+            newlist[k++]=list2[j++];
         }
     }
     if(i<size1){
@@ -56,13 +56,13 @@ int *merge_lists(int *list1,int size1,int *list2,int size2)
         assert(k+j==size1+size2);
         memcpy((newlist+k),list2,(size2-j)*sizeof(int));
     }
-    return newlst;
+    return newlist;
 }
 int* mpiqsort(int* input, int globalNumElements, int* dataLengthPtr, MPI_Comm comm, int commRank, int commSize) {
     int *mylist = input;
     int n_elems = *dataLengthPtr;
-    int myid    = commRank;
-    int pivot,root;
+    int pivot;
+    int myid    = commRank, partner, root;
     int d = (int) log(commSize)/log(2);
     int ranks[commSize];
     MPI_Group orig_group, my_group, new_group;
@@ -71,21 +71,22 @@ int* mpiqsort(int* input, int globalNumElements, int* dataLengthPtr, MPI_Comm co
     MPI_Comm_group(MPI_COMM_WORLD, &orig_group);
     my_group = orig_group;
     for(int j=0;j<commSize;j++){
-        ranks[i]=i;
+        ranks[j]=j;
     }
     /* To begin, sort locally*/
     qsort(mylist,n_elems,sizeof(int),compare);
-    for(i=d-1;i>=0;i--){
+    for(int i=d-1;i>=0;i--){
         if(myid == 0){
             /* I'm the leader. I get to select pivot. */
             pivot = *(mylist+(n_elems/2));
         }
         MPI_Bcast((void *)pivot,1,MPI_INT,0,comm);
         DEBUG("Id(%d) : Pivot is %d\n",myid,pivot);
-        partner = myid XOR pow(2,i);
+        partner = myid XOR (1<<i);
         int split_index = binary_search(mylist,0,n_elems,pivot);
         int num_low = split_index+1;
         int num_high = n_elems - num_low;
+        int num_retained;
         if(partner<myid){
             /* Send lower sublist and retain higher*/
             MPI_Send((void *)num_low,1,MPI_INT,partner,i,comm);
@@ -118,7 +119,7 @@ int* mpiqsort(int* input, int globalNumElements, int* dataLengthPtr, MPI_Comm co
         MPI_Comm_create(MPI_COMM_WORLD, new_group, &new_comm);
         comm = new_comm;
         my_group = new_group;
-        comSize = comSize/2;
+        commSize = commSize/2;
     }
     /* Concatenate all lists and return */
     return mylist;
